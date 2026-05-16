@@ -1,19 +1,19 @@
-# ToanRoiRac
+# YoutubeCourses
 
-Kho lưu trữ này dùng để sắp xếp và đọc lại tài liệu Toán Rời Rạc dưới dạng Markdown.
+Kho này lưu tài liệu học tập, hiện có phần Toán Rời Rạc được viết lại dưới dạng Markdown.
 
-## Nội dung chính
+## Cấu trúc chính
 
-- `Raw/`: tài liệu gốc ở dạng PDF.
-- `ReWrite/`: bản viết lại ở dạng Markdown theo từng chương.
-- `index.html`: trang tĩnh để duyệt và đọc toàn bộ file `.md` trong các thư mục con.
-- `styles.css`: file giao diện riêng cho trang đọc Markdown.
+- `ToanRoiRac/Raw/`: tài liệu gốc dạng PDF.
+- `ToanRoiRac/ReWrite/`: bản viết lại dạng Markdown theo từng chương.
+- `index.html`: trang đọc Markdown tĩnh đặt ở root repo.
+- `styles.css`: giao diện riêng cho trang đọc.
 
-## Cách dùng
+## Cách hoạt động
 
-Mở `index.html` trên GitHub Pages để trang tự quét các file Markdown trong repo.
+Trang `index.html` được khóa để chỉ đọc các file Markdown thuộc đúng repo GitHub `Hiulaptop/YoutubeCourses`.
 
-Nếu muốn đọc từ máy cá nhân, có thể dùng nút **Chọn thư mục** trên giao diện để chọn thư mục chứa tài liệu.
+Khi mở bằng GitHub Pages, trang sẽ tự quét toàn bộ thư mục trong repo này và hiển thị danh sách file `.md` để đọc trực tiếp.
 
 ## Mục tiêu
 

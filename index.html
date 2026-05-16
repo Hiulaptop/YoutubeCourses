@@ -22,13 +22,12 @@
       </div>
 
       <section class="controls">
-        <p class="control-title">Nguồn dữ liệu</p>
+        <p class="control-title">Repo hiện tại</p>
         <div class="button-row">
-          <button class="button" id="reloadRepoButton" type="button">Quét GitHub</button>
-          <button class="ghost-button" id="pickFolderButton" type="button">Chọn thư mục</button>
+          <button class="button" id="reloadRepoButton" type="button">Quét lại repo</button>
         </div>
         <input class="search" id="searchInput" type="search" placeholder="Tìm tên file hoặc thư mục..." autocomplete="off">
-        <p class="source-note" id="sourceNote">Ưu tiên đọc repo hiện tại trên GitHub Pages. Nếu mở file trên máy, có thể bấm “Chọn thư mục”.</p>
+        <p class="source-note" id="sourceNote">Trang này chỉ đọc các file Markdown thuộc đúng repo GitHub hiện tại.</p>
         <p class="status" id="statusText">Đang chuẩn bị danh sách tài liệu...</p>
       </section>
 
@@ -41,7 +40,7 @@
       <header class="viewer-header">
         <div>
           <h2 class="viewer-title" id="viewerTitle">Chọn một file Markdown</h2>
-          <p class="viewer-subtitle" id="viewerSubtitle">Trang sẽ tự quét toàn bộ thư mục con để hiện danh sách file `.md`.</p>
+          <p class="viewer-subtitle" id="viewerSubtitle">Trang sẽ tự quét toàn bộ thư mục của repo này để hiện danh sách file `.md`.</p>
         </div>
         <div class="viewer-actions">
           <span class="meta-chip" id="sourceChip">Chưa có nguồn</span>
@@ -52,7 +51,7 @@
       <section id="viewerBody">
         <div class="placeholder" id="placeholder">
           <strong>Chưa có nội dung để hiển thị</strong>
-          <span>Chọn file ở khung bên trái hoặc quét repo GitHub nếu danh sách chưa xuất hiện.</span>
+          <span>Chọn file ở khung bên trái hoặc quét lại repo nếu danh sách chưa xuất hiện.</span>
         </div>
         <article class="markdown hidden" id="markdownContent"></article>
       </section>
@@ -64,19 +63,22 @@
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
   <script>
+    const REPO_SCOPE = Object.freeze({
+      owner: "Hiulaptop",
+      repo: "YoutubeCourses",
+      fallbackBranch: "master"
+    });
+
     const state = {
       files: [],
-      sourceType: null,
       currentFile: null,
       repoConfig: null,
-      localDirectoryHandle: null,
       filter: ""
     };
 
     const elements = {
       themeToggle: document.getElementById("themeToggle"),
       reloadRepoButton: document.getElementById("reloadRepoButton"),
-      pickFolderButton: document.getElementById("pickFolderButton"),
       searchInput: document.getElementById("searchInput"),
       sourceNote: document.getElementById("sourceNote"),
       statusText: document.getElementById("statusText"),
@@ -117,10 +119,6 @@
       return path.replace(/^\.\//, "").replace(/\\/g, "/");
     }
 
-    function escapeRegExp(value) {
-      return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    }
-
     function escapeHtml(value) {
       return value
         .replaceAll("&", "&amp;")
@@ -141,57 +139,28 @@
       }
     }
 
-    function inferBasePath(pathParts) {
-      const trailingSlash = window.location.pathname.endsWith("/");
-      const segmentsAfterRepo = pathParts.slice(1);
-
-      if (segmentsAfterRepo.length === 0) {
-        return "";
-      }
-
-      if (trailingSlash) {
-        return normalizePath(segmentsAfterRepo.join("/"));
-      }
-
-      const lastSegment = segmentsAfterRepo[segmentsAfterRepo.length - 1];
-      const baseSegments = lastSegment.includes(".") ? segmentsAfterRepo.slice(0, -1) : segmentsAfterRepo;
-      return normalizePath(baseSegments.join("/"));
-    }
-
-    function inferRepoConfig() {
-      const params = new URLSearchParams(window.location.search);
-      const owner = params.get("owner");
-      const repo = params.get("repo");
-      const branch = params.get("branch") || "main";
-      const basePath = params.get("base") || "";
-
-      if (owner && repo) {
-        return { owner, repo, branch, basePath: normalizePath(basePath) };
-      }
-
-      const hostname = window.location.hostname;
-      const pathParts = window.location.pathname.split("/").filter(Boolean);
-
-      if (hostname.endsWith("github.io")) {
-        const inferredOwner = hostname.replace(/\.github\.io$/, "");
-        if (pathParts.length === 0) {
-          return {
-            owner: inferredOwner,
-            repo: `${inferredOwner}.github.io`,
-            branch,
-            basePath: ""
-          };
+    async function resolveRepoConfig() {
+      const metadataUrl = `https://api.github.com/repos/${REPO_SCOPE.owner}/${REPO_SCOPE.repo}`;
+      const response = await fetch(metadataUrl, {
+        headers: {
+          Accept: "application/vnd.github+json"
         }
+      });
 
+      if (!response.ok) {
         return {
-          owner: inferredOwner,
-          repo: pathParts[0],
-          branch,
-          basePath: inferBasePath(pathParts)
+          owner: REPO_SCOPE.owner,
+          repo: REPO_SCOPE.repo,
+          branch: REPO_SCOPE.fallbackBranch
         };
       }
 
-      return null;
+      const data = await response.json();
+      return {
+        owner: REPO_SCOPE.owner,
+        repo: REPO_SCOPE.repo,
+        branch: data.default_branch || REPO_SCOPE.fallbackBranch
+      };
     }
 
     async function fetchRepoTree(repoConfig) {
@@ -213,25 +182,12 @@
 
       const mdFiles = data.tree
         .filter((item) => item.type === "blob" && item.path.toLowerCase().endsWith(".md"))
-        .filter((item) => {
-          if (!repoConfig.basePath) {
-            return true;
-          }
-          return item.path === repoConfig.basePath || item.path.startsWith(`${repoConfig.basePath}/`);
-        })
         .map((item) => {
-          const basePathPattern = repoConfig.basePath
-            ? new RegExp(`^${escapeRegExp(repoConfig.basePath)}/?`)
-            : null;
-          const relativePath = repoConfig.basePath
-            ? item.path.replace(basePathPattern, "")
-            : item.path;
           return {
             id: `repo:${item.path}`,
-            path: normalizePath(relativePath),
+            path: normalizePath(item.path),
             fullPath: normalizePath(item.path),
             name: item.path.split("/").pop(),
-            sourceType: "github",
             rawUrl: `https://raw.githubusercontent.com/${repoConfig.owner}/${repoConfig.repo}/${repoConfig.branch}/${encodeURI(item.path)}`
           };
         })
@@ -241,45 +197,11 @@
     }
 
     async function fetchMarkdownFile(file) {
-      if (file.sourceType === "github") {
-        const response = await fetch(file.rawUrl);
-        if (!response.ok) {
-          throw new Error(`Không tải được ${file.path} (${response.status}).`);
-        }
-        return response.text();
+      const response = await fetch(file.rawUrl);
+      if (!response.ok) {
+        throw new Error(`Không tải được ${file.path} (${response.status}).`);
       }
-
-      if (file.sourceType === "local") {
-        const contentFile = await file.handle.getFile();
-        return contentFile.text();
-      }
-
-      throw new Error("Nguồn file chưa được hỗ trợ.");
-    }
-
-    async function collectLocalMarkdownFiles(handle, base = "") {
-      const files = [];
-
-      for await (const [entryName, entryHandle] of handle.entries()) {
-        const nextPath = base ? `${base}/${entryName}` : entryName;
-        if (entryHandle.kind === "directory") {
-          files.push(...await collectLocalMarkdownFiles(entryHandle, nextPath));
-          continue;
-        }
-
-        if (entryHandle.kind === "file" && entryName.toLowerCase().endsWith(".md")) {
-          files.push({
-            id: `local:${nextPath}`,
-            path: normalizePath(nextPath),
-            fullPath: normalizePath(nextPath),
-            name: entryName,
-            sourceType: "local",
-            handle: entryHandle
-          });
-        }
-      }
-
-      return files.sort((left, right) => left.path.localeCompare(right.path, "vi"));
+      return response.text();
     }
 
     function buildGroupedFiles(files) {
@@ -377,11 +299,9 @@
 
         elements.viewerTitle.textContent = file.name;
         elements.viewerSubtitle.textContent = file.path;
-        elements.sourceChip.textContent = file.sourceType === "github" ? "Nguồn: GitHub" : "Nguồn: Thư mục local";
-        elements.openRawButton.classList.toggle("hidden", file.sourceType !== "github");
-        elements.openRawButton.onclick = file.sourceType === "github"
-          ? () => window.open(file.rawUrl, "_blank", "noopener,noreferrer")
-          : null;
+        elements.sourceChip.textContent = `Repo: ${state.repoConfig.owner}/${state.repoConfig.repo}`;
+        elements.openRawButton.classList.remove("hidden");
+        elements.openRawButton.onclick = () => window.open(file.rawUrl, "_blank", "noopener,noreferrer");
         setHashPath(file.path);
         setStatus(`Đang hiển thị ${file.path}.`);
       } catch (error) {
@@ -406,20 +326,14 @@
     }
 
     async function initializeRepoListing() {
-      const repoConfig = inferRepoConfig();
+      const repoConfig = await resolveRepoConfig();
       state.repoConfig = repoConfig;
-
-      if (!repoConfig) {
-        setStatus("Không suy ra được repo GitHub. Có thể dùng nút Chọn thư mục để đọc local.");
-        elements.sourceNote.textContent = "Muốn quét GitHub chuẩn xác hơn, thêm query `?owner=...&repo=...&branch=main&base=ToanRoiRac`.";
-        return;
-      }
 
       try {
         setStatus(`Đang quét repo ${repoConfig.owner}/${repoConfig.repo}...`);
         state.files = await fetchRepoTree(repoConfig);
-        state.sourceType = "github";
-        elements.sourceNote.textContent = `Đang đọc từ ${repoConfig.owner}/${repoConfig.repo} trên nhánh ${repoConfig.branch}${repoConfig.basePath ? `, thư mục ${repoConfig.basePath}` : ""}.`;
+        elements.sourceNote.textContent = `Đang đọc toàn bộ file Markdown từ repo ${repoConfig.owner}/${repoConfig.repo} trên nhánh ${repoConfig.branch}.`;
+        elements.sourceChip.textContent = `Repo: ${repoConfig.owner}/${repoConfig.repo}`;
 
         renderTree();
 
@@ -438,42 +352,6 @@
       }
     }
 
-    async function initializeLocalListing() {
-      if (!window.showDirectoryPicker) {
-        setStatus("Trình duyệt hiện tại không hỗ trợ chọn thư mục local.", true);
-        return;
-      }
-
-      try {
-        const directoryHandle = await window.showDirectoryPicker();
-        state.localDirectoryHandle = directoryHandle;
-        setStatus("Đang quét thư mục local...");
-        state.files = await collectLocalMarkdownFiles(directoryHandle);
-        state.sourceType = "local";
-        elements.sourceNote.textContent = `Đang đọc từ thư mục local: ${directoryHandle.name}.`;
-        elements.sourceChip.textContent = "Nguồn: Thư mục local";
-        renderTree();
-
-        if (state.files.length === 0) {
-          setStatus("Không tìm thấy file Markdown trong thư mục đã chọn.", true);
-          return;
-        }
-
-        const restored = await restoreHashSelection();
-        if (!restored) {
-          await openFile(state.files[0]);
-        }
-      } catch (error) {
-        if (error && error.name === "AbortError") {
-          setStatus("Đã hủy chọn thư mục.");
-          return;
-        }
-
-        console.error(error);
-        setStatus(error.message || "Không thể quét thư mục local.", true);
-      }
-    }
-
     function bindEvents() {
       elements.themeToggle.addEventListener("click", () => {
         const nextTheme = document.body.dataset.theme === "dark" ? "light" : "dark";
@@ -482,10 +360,6 @@
 
       elements.reloadRepoButton.addEventListener("click", () => {
         initializeRepoListing();
-      });
-
-      elements.pickFolderButton.addEventListener("click", () => {
-        initializeLocalListing();
       });
 
       elements.searchInput.addEventListener("input", (event) => {
