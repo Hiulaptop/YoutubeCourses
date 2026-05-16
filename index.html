@@ -68,12 +68,18 @@
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/marked-katex-extension@5.1.8/lib/index.umd.js"></script>
   <script>
     const REPO_SCOPE = Object.freeze({
       owner: "Hiulaptop",
       repo: "YoutubeCourses",
       fallbackBranch: "master"
+    });
+
+    const INLINE_KATEX_RULE = /^(\${1,2})(?!\$)((?:\\.|[^\\\n])*?(?:\\.|[^\\\n\$]))\1(?=[\s?!\.,:;\)\]\}"'”’！？。，：；]|$)/;
+    const BLOCK_KATEX_RULE = /^(\${1,2})\n((?:\\[^]|[^\\])+?)\n\1(?:\n|$)/;
+    const KATEX_RENDER_OPTIONS = Object.freeze({
+      throwOnError: false,
+      strict: "ignore"
     });
 
     const state = {
@@ -109,9 +115,12 @@
       mangle: false
     });
 
-    marked.use(markedKatex({
-      throwOnError: false
-    }));
+    marked.use({
+      extensions: [
+        createInlineKatexExtension(),
+        createBlockKatexExtension()
+      ]
+    });
 
     function applyTheme(theme) {
       document.body.dataset.theme = theme;
@@ -143,6 +152,128 @@
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
+    }
+
+    function startsInlineMath(previousCharacter) {
+      return !previousCharacter || /[\s([{'"“‘]/.test(previousCharacter);
+    }
+
+    function shouldFallbackMath(text, displayMode) {
+      if (/["“”]/.test(text)) {
+        return true;
+      }
+
+      return !displayMode && /[À-ỹĐđ]/.test(text);
+    }
+
+    function formatMathFallback(text, displayMode) {
+      const normalized = text
+        .replaceAll("\\space", " ")
+        .replace(/\\sqrt\{([^}]+)\}/g, "√($1)")
+        .replace(/\^\\circ/g, "°")
+        .replaceAll("\\Rightarrow", "⇒")
+        .replaceAll("\\Leftrightarrow", "⇔")
+        .replaceAll("\\rightarrow", "→")
+        .replaceAll("\\leftrightarrow", "↔")
+        .replaceAll("\\wedge", "∧")
+        .replaceAll("\\vee", "∨")
+        .replaceAll("\\neg", "¬")
+        .replaceAll("\\overline", "overline")
+        .replaceAll("\\le", "≤")
+        .replaceAll("\\ge", "≥")
+        .replaceAll("\\lt", "<")
+        .replaceAll("\\gt", ">")
+        .replaceAll("\\pi", "π")
+        .replaceAll("\\therefore", "∴")
+        .replaceAll("\\vdots", "⋮")
+        .replaceAll("\\forall", "∀")
+        .replaceAll("\\exists", "∃")
+        .replaceAll("\\exist", "∃");
+      const formatted = escapeHtml(normalized);
+
+      if (displayMode) {
+        return `<div class="math-fallback block-math-fallback">${formatted.replaceAll("\\\\", "<br>")}</div>\n`;
+      }
+
+      return `<span class="math-fallback inline-math-fallback">${formatted}</span>`;
+    }
+
+    function renderKatexToken(text, displayMode) {
+      if (shouldFallbackMath(text, displayMode)) {
+        return formatMathFallback(text, displayMode);
+      }
+
+      try {
+        return katex.renderToString(text, {
+          ...KATEX_RENDER_OPTIONS,
+          displayMode
+        }) + (displayMode ? "\n" : "");
+      } catch (error) {
+        return formatMathFallback(text, displayMode);
+      }
+    }
+
+    function createInlineKatexExtension() {
+      return {
+        name: "inlineKatex",
+        level: "inline",
+        start(src) {
+          for (let index = 0; index < src.length; index += 1) {
+            if (src.charAt(index) !== "$") {
+              continue;
+            }
+
+            if (!startsInlineMath(index === 0 ? "" : src.charAt(index - 1))) {
+              continue;
+            }
+
+            if (src.slice(index).match(INLINE_KATEX_RULE)) {
+              return index;
+            }
+          }
+
+          return undefined;
+        },
+        tokenizer(src) {
+          const match = src.match(INLINE_KATEX_RULE);
+          if (!match) {
+            return undefined;
+          }
+
+          return {
+            type: "inlineKatex",
+            raw: match[0],
+            text: match[2].trim(),
+            displayMode: match[1].length === 2
+          };
+        },
+        renderer(token) {
+          return renderKatexToken(token.text, token.displayMode);
+        }
+      };
+    }
+
+    function createBlockKatexExtension() {
+      return {
+        name: "blockKatex",
+        level: "block",
+        tokenizer(src) {
+          const match = src.match(BLOCK_KATEX_RULE);
+          if (!match) {
+            return undefined;
+          }
+
+          return {
+            type: "blockKatex",
+            raw: match[0],
+            text: match[2].trim(),
+            displayMode: match[1].length === 2
+          };
+        },
+        renderer(token) {
+          return renderKatexToken(token.text, token.displayMode);
+        }
+      };
     }
 
     function getHashPath() {
