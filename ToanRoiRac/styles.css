@@ -1,0 +1,518 @@
+:root {
+  color-scheme: light;
+  --bg: linear-gradient(180deg, #fff8e6 0%, #fffdf4 100%);
+  --surface: rgba(255, 252, 242, 0.88);
+  --surface-strong: rgba(255, 249, 233, 0.98);
+  --surface-muted: rgba(255, 246, 220, 0.75);
+  --border: rgba(142, 114, 57, 0.18);
+  --text: #352a1a;
+  --text-soft: #6b5c43;
+  --accent: #9f6f2d;
+  --accent-strong: #7c5318;
+  --accent-soft: rgba(159, 111, 45, 0.14);
+  --shadow: 0 20px 40px rgba(138, 111, 59, 0.12);
+  --code-bg: rgba(116, 90, 39, 0.08);
+  --selected: rgba(159, 111, 45, 0.16);
+  --selected-border: rgba(159, 111, 45, 0.28);
+  --danger: #a04a3a;
+}
+
+body[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: linear-gradient(180deg, #151617 0%, #212327 100%);
+  --surface: rgba(34, 36, 40, 0.9);
+  --surface-strong: rgba(27, 29, 32, 0.98);
+  --surface-muted: rgba(40, 43, 48, 0.74);
+  --border: rgba(255, 255, 255, 0.1);
+  --text: #edf0f3;
+  --text-soft: #a7aeb8;
+  --accent: #d0a560;
+  --accent-strong: #ebbe76;
+  --accent-soft: rgba(208, 165, 96, 0.16);
+  --shadow: 0 20px 40px rgba(0, 0, 0, 0.28);
+  --code-bg: rgba(255, 255, 255, 0.08);
+  --selected: rgba(208, 165, 96, 0.18);
+  --selected-border: rgba(208, 165, 96, 0.26);
+  --danger: #e78e81;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Be Vietnam Pro", sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  inset: auto;
+  width: 36vw;
+  height: 36vw;
+  border-radius: 999px;
+  pointer-events: none;
+  filter: blur(70px);
+  opacity: 0.22;
+  z-index: 0;
+}
+
+body::before {
+  top: -8vw;
+  right: -10vw;
+  background: #ffd88b;
+}
+
+body::after {
+  bottom: -12vw;
+  left: -8vw;
+  background: #f1d3a7;
+}
+
+body[data-theme="dark"]::before {
+  background: #3d3425;
+  opacity: 0.28;
+}
+
+body[data-theme="dark"]::after {
+  background: #2b323c;
+  opacity: 0.3;
+}
+
+.page {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 24px;
+  width: min(1400px, calc(100% - 32px));
+  margin: 24px auto;
+  align-items: start;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px);
+}
+
+.sidebar {
+  position: sticky;
+  top: 24px;
+  padding: 20px;
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.brand {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.brand p {
+  margin: 8px 0 0;
+  color: var(--text-soft);
+  font-size: 0.94rem;
+  line-height: 1.5;
+}
+
+.theme-toggle {
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+  color: var(--text);
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  flex-shrink: 0;
+}
+
+.theme-toggle:hover {
+  transform: translateY(-1px);
+  border-color: var(--selected-border);
+}
+
+.controls {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+}
+
+.control-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.button-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.button,
+.ghost-button {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  padding: 11px 14px;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.button {
+  background: var(--accent);
+  color: #fffaf1;
+  font-weight: 600;
+}
+
+.button:hover,
+.ghost-button:hover {
+  transform: translateY(-1px);
+}
+
+.ghost-button {
+  background: var(--surface-strong);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.search {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+  color: var(--text);
+  border-radius: 14px;
+  outline: none;
+}
+
+.search:focus {
+  border-color: var(--selected-border);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.source-note,
+.status,
+.hint {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+
+.status.error {
+  color: var(--danger);
+}
+
+.tree {
+  overflow: auto;
+  min-height: 240px;
+  padding-right: 6px;
+}
+
+.tree-group {
+  display: grid;
+  gap: 10px;
+}
+
+.tree-folder {
+  display: grid;
+  gap: 6px;
+}
+
+.tree-folder-title {
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+  padding: 0 4px;
+}
+
+.file-button {
+  width: 100%;
+  padding: 12px 14px;
+  text-align: left;
+  border-radius: 16px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.file-button:hover {
+  background: var(--accent-soft);
+  border-color: var(--selected-border);
+  transform: translateX(2px);
+}
+
+.file-button.active {
+  background: var(--selected);
+  border-color: var(--selected-border);
+}
+
+.file-path {
+  display: block;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  margin-top: 4px;
+  word-break: break-word;
+}
+
+.viewer {
+  padding: 24px;
+  min-height: calc(100vh - 48px);
+  display: grid;
+  gap: 18px;
+}
+
+.viewer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.viewer-title {
+  margin: 0;
+  font-size: clamp(1.5rem, 2vw, 2rem);
+  line-height: 1.2;
+}
+
+.viewer-subtitle {
+  margin: 8px 0 0;
+  color: var(--text-soft);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.viewer-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.markdown {
+  font-family: "Merriweather", serif;
+  font-size: 1.02rem;
+  line-height: 1.85;
+  max-width: 900px;
+}
+
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4 {
+  font-family: "Be Vietnam Pro", sans-serif;
+  line-height: 1.25;
+  margin-top: 1.8em;
+  margin-bottom: 0.7em;
+}
+
+.markdown h1 {
+  font-size: 2rem;
+}
+
+.markdown h2 {
+  font-size: 1.5rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.markdown h3 {
+  font-size: 1.2rem;
+}
+
+.markdown p,
+.markdown ul,
+.markdown ol,
+.markdown blockquote,
+.markdown table,
+.markdown pre {
+  margin: 1em 0;
+}
+
+.markdown ul,
+.markdown ol {
+  padding-left: 1.5rem;
+}
+
+.markdown li + li {
+  margin-top: 0.4rem;
+}
+
+.markdown code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  background: var(--code-bg);
+  padding: 0.18em 0.4em;
+  border-radius: 8px;
+  font-size: 0.92em;
+}
+
+.markdown pre {
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 14px;
+  overflow: auto;
+}
+
+.markdown pre code {
+  padding: 0;
+  background: none;
+}
+
+.markdown blockquote {
+  margin-left: 0;
+  padding: 0.4rem 1rem;
+  border-left: 4px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 0 16px 16px 0;
+}
+
+.markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+}
+
+.markdown th,
+.markdown td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.markdown thead {
+  background: var(--surface-muted);
+  font-family: "Be Vietnam Pro", sans-serif;
+}
+
+.markdown tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.placeholder {
+  display: grid;
+  gap: 14px;
+  place-content: center;
+  min-height: 55vh;
+  text-align: center;
+  color: var(--text-soft);
+  padding: 32px;
+}
+
+.placeholder strong {
+  color: var(--text);
+  font-size: 1.12rem;
+}
+
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.hidden {
+  display: none !important;
+}
+
+@media (max-width: 980px) {
+  .page {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar,
+  .viewer {
+    position: static;
+    max-height: none;
+    min-height: 0;
+  }
+
+  .button-row {
+    grid-template-columns: 1fr;
+  }
+
+  .viewer-header {
+    flex-direction: column;
+  }
+
+  .viewer-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .page {
+    width: min(100% - 16px, 1400px);
+    margin: 12px auto;
+    gap: 16px;
+  }
+
+  .sidebar,
+  .viewer {
+    padding: 18px;
+    border-radius: 20px;
+  }
+
+  .brand {
+    flex-direction: column;
+  }
+
+  .theme-toggle {
+    width: 100%;
+  }
+}

@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ToanRoiRac Markdown Reader</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Merriweather:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="page">
+    <aside class="sidebar panel">
+      <div class="brand">
+        <div>
+          <h1>Markdown Reader</h1>
+          <p>Đọc toàn bộ file `.md` trong thư mục con với giao diện sáng dịu, tối trầm và dễ tra cứu.</p>
+        </div>
+        <button class="theme-toggle" id="themeToggle" type="button" aria-label="Đổi giao diện">☀</button>
+      </div>
+
+      <section class="controls">
+        <p class="control-title">Nguồn dữ liệu</p>
+        <div class="button-row">
+          <button class="button" id="reloadRepoButton" type="button">Quét GitHub</button>
+          <button class="ghost-button" id="pickFolderButton" type="button">Chọn thư mục</button>
+        </div>
+        <input class="search" id="searchInput" type="search" placeholder="Tìm tên file hoặc thư mục..." autocomplete="off">
+        <p class="source-note" id="sourceNote">Ưu tiên đọc repo hiện tại trên GitHub Pages. Nếu mở file trên máy, có thể bấm “Chọn thư mục”.</p>
+        <p class="status" id="statusText">Đang chuẩn bị danh sách tài liệu...</p>
+      </section>
+
+      <div class="tree" id="treeContainer" aria-live="polite"></div>
+
+      <p class="hint">Tự động nhận theme đã lưu. Đường dẫn file đang mở sẽ được lưu vào URL để chia sẻ trực tiếp.</p>
+    </aside>
+
+    <main class="viewer panel">
+      <header class="viewer-header">
+        <div>
+          <h2 class="viewer-title" id="viewerTitle">Chọn một file Markdown</h2>
+          <p class="viewer-subtitle" id="viewerSubtitle">Trang sẽ tự quét toàn bộ thư mục con để hiện danh sách file `.md`.</p>
+        </div>
+        <div class="viewer-actions">
+          <span class="meta-chip" id="sourceChip">Chưa có nguồn</span>
+          <button class="ghost-button hidden" id="openRawButton" type="button">Mở file gốc</button>
+        </div>
+      </header>
+
+      <section id="viewerBody">
+        <div class="placeholder" id="placeholder">
+          <strong>Chưa có nội dung để hiển thị</strong>
+          <span>Chọn file ở khung bên trái hoặc quét repo GitHub nếu danh sách chưa xuất hiện.</span>
+        </div>
+        <article class="markdown hidden" id="markdownContent"></article>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    const state = {
+      files: [],
+      sourceType: null,
+      currentFile: null,
+      repoConfig: null,
+      localDirectoryHandle: null,
+      filter: ""
+    };
+
+    const elements = {
+      themeToggle: document.getElementById("themeToggle"),
+      reloadRepoButton: document.getElementById("reloadRepoButton"),
+      pickFolderButton: document.getElementById("pickFolderButton"),
+      searchInput: document.getElementById("searchInput"),
+      sourceNote: document.getElementById("sourceNote"),
+      statusText: document.getElementById("statusText"),
+      treeContainer: document.getElementById("treeContainer"),
+      viewerTitle: document.getElementById("viewerTitle"),
+      viewerSubtitle: document.getElementById("viewerSubtitle"),
+      sourceChip: document.getElementById("sourceChip"),
+      openRawButton: document.getElementById("openRawButton"),
+      placeholder: document.getElementById("placeholder"),
+      markdownContent: document.getElementById("markdownContent")
+    };
+
+    marked.setOptions({
+      gfm: true,
+      breaks: false,
+      headerIds: true,
+      mangle: false
+    });
+
+    function applyTheme(theme) {
+      document.body.dataset.theme = theme;
+      localStorage.setItem("markdown-reader-theme", theme);
+      elements.themeToggle.textContent = theme === "dark" ? "☾" : "☀";
+    }
+
+    function initTheme() {
+      const savedTheme = localStorage.getItem("markdown-reader-theme");
+      const preferredDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      applyTheme(savedTheme || (preferredDark ? "dark" : "light"));
+    }
+
+    function setStatus(message, isError = false) {
+      elements.statusText.textContent = message;
+      elements.statusText.classList.toggle("error", isError);
+    }
+
+    function normalizePath(path) {
+      return path.replace(/^\.\//, "").replace(/\\/g, "/");
+    }
+
+    function escapeRegExp(value) {
+      return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
+    function escapeHtml(value) {
+      return value
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function getHashPath() {
+      return decodeURIComponent(window.location.hash.replace(/^#/, "").trim());
+    }
+
+    function setHashPath(path) {
+      const nextHash = encodeURIComponent(path);
+      if (window.location.hash.replace(/^#/, "") !== nextHash) {
+        history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${nextHash}`);
+      }
+    }
+
+    function inferBasePath(pathParts) {
+      const trailingSlash = window.location.pathname.endsWith("/");
+      const segmentsAfterRepo = pathParts.slice(1);
+
+      if (segmentsAfterRepo.length === 0) {
+        return "";
+      }
+
+      if (trailingSlash) {
+        return normalizePath(segmentsAfterRepo.join("/"));
+      }
+
+      const lastSegment = segmentsAfterRepo[segmentsAfterRepo.length - 1];
+      const baseSegments = lastSegment.includes(".") ? segmentsAfterRepo.slice(0, -1) : segmentsAfterRepo;
+      return normalizePath(baseSegments.join("/"));
+    }
+
+    function inferRepoConfig() {
+      const params = new URLSearchParams(window.location.search);
+      const owner = params.get("owner");
+      const repo = params.get("repo");
+      const branch = params.get("branch") || "main";
+      const basePath = params.get("base") || "";
+
+      if (owner && repo) {
+        return { owner, repo, branch, basePath: normalizePath(basePath) };
+      }
+
+      const hostname = window.location.hostname;
+      const pathParts = window.location.pathname.split("/").filter(Boolean);
+
+      if (hostname.endsWith("github.io")) {
+        const inferredOwner = hostname.replace(/\.github\.io$/, "");
+        if (pathParts.length === 0) {
+          return {
+            owner: inferredOwner,
+            repo: `${inferredOwner}.github.io`,
+            branch,
+            basePath: ""
+          };
+        }
+
+        return {
+          owner: inferredOwner,
+          repo: pathParts[0],
+          branch,
+          basePath: inferBasePath(pathParts)
+        };
+      }
+
+      return null;
+    }
+
+    async function fetchRepoTree(repoConfig) {
+      const apiUrl = `https://api.github.com/repos/${repoConfig.owner}/${repoConfig.repo}/git/trees/${encodeURIComponent(repoConfig.branch)}?recursive=1`;
+      const response = await fetch(apiUrl, {
+        headers: {
+          Accept: "application/vnd.github+json"
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Không đọc được cây thư mục GitHub (${response.status}).`);
+      }
+
+      const data = await response.json();
+      if (!Array.isArray(data.tree)) {
+        throw new Error("GitHub API không trả về danh sách file hợp lệ.");
+      }
+
+      const mdFiles = data.tree
+        .filter((item) => item.type === "blob" && item.path.toLowerCase().endsWith(".md"))
+        .filter((item) => {
+          if (!repoConfig.basePath) {
+            return true;
+          }
+          return item.path === repoConfig.basePath || item.path.startsWith(`${repoConfig.basePath}/`);
+        })
+        .map((item) => {
+          const basePathPattern = repoConfig.basePath
+            ? new RegExp(`^${escapeRegExp(repoConfig.basePath)}/?`)
+            : null;
+          const relativePath = repoConfig.basePath
+            ? item.path.replace(basePathPattern, "")
+            : item.path;
+          return {
+            id: `repo:${item.path}`,
+            path: normalizePath(relativePath),
+            fullPath: normalizePath(item.path),
+            name: item.path.split("/").pop(),
+            sourceType: "github",
+            rawUrl: `https://raw.githubusercontent.com/${repoConfig.owner}/${repoConfig.repo}/${repoConfig.branch}/${encodeURI(item.path)}`
+          };
+        })
+        .sort((left, right) => left.path.localeCompare(right.path, "vi"));
+
+      return mdFiles;
+    }
+
+    async function fetchMarkdownFile(file) {
+      if (file.sourceType === "github") {
+        const response = await fetch(file.rawUrl);
+        if (!response.ok) {
+          throw new Error(`Không tải được ${file.path} (${response.status}).`);
+        }
+        return response.text();
+      }
+
+      if (file.sourceType === "local") {
+        const contentFile = await file.handle.getFile();
+        return contentFile.text();
+      }
+
+      throw new Error("Nguồn file chưa được hỗ trợ.");
+    }
+
+    async function collectLocalMarkdownFiles(handle, base = "") {
+      const files = [];
+
+      for await (const [entryName, entryHandle] of handle.entries()) {
+        const nextPath = base ? `${base}/${entryName}` : entryName;
+        if (entryHandle.kind === "directory") {
+          files.push(...await collectLocalMarkdownFiles(entryHandle, nextPath));
+          continue;
+        }
+
+        if (entryHandle.kind === "file" && entryName.toLowerCase().endsWith(".md")) {
+          files.push({
+            id: `local:${nextPath}`,
+            path: normalizePath(nextPath),
+            fullPath: normalizePath(nextPath),
+            name: entryName,
+            sourceType: "local",
+            handle: entryHandle
+          });
+        }
+      }
+
+      return files.sort((left, right) => left.path.localeCompare(right.path, "vi"));
+    }
+
+    function buildGroupedFiles(files) {
+      const groups = new Map();
+
+      files.forEach((file) => {
+        const segments = file.path.split("/");
+        const folder = segments.length > 1 ? segments.slice(0, -1).join("/") : "Gốc";
+        if (!groups.has(folder)) {
+          groups.set(folder, []);
+        }
+        groups.get(folder).push(file);
+      });
+
+      return Array.from(groups.entries()).sort((left, right) => left[0].localeCompare(right[0], "vi"));
+    }
+
+    function renderTree() {
+      const keyword = state.filter.trim().toLowerCase();
+      const visibleFiles = state.files.filter((file) => {
+        if (!keyword) {
+          return true;
+        }
+        return file.path.toLowerCase().includes(keyword) || file.name.toLowerCase().includes(keyword);
+      });
+
+      if (visibleFiles.length === 0) {
+        elements.treeContainer.innerHTML = '<p class="status">Không tìm thấy file Markdown phù hợp.</p>';
+        return;
+      }
+
+      const groups = buildGroupedFiles(visibleFiles);
+      const html = groups.map(([folder, files]) => {
+        const items = files.map((file) => {
+          const activeClass = state.currentFile && state.currentFile.id === file.id ? "active" : "";
+          return `
+            <button class="file-button ${activeClass}" type="button" data-file-id="${escapeHtml(file.id)}">
+              <strong>${escapeHtml(file.name)}</strong>
+              <span class="file-path">${escapeHtml(file.path)}</span>
+            </button>
+          `;
+        }).join("");
+
+        return `
+          <section class="tree-folder">
+            <div class="tree-folder-title">${escapeHtml(folder)}</div>
+            <div class="tree-group">${items}</div>
+          </section>
+        `;
+      }).join("");
+
+      elements.treeContainer.innerHTML = html;
+
+      elements.treeContainer.querySelectorAll("[data-file-id]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const file = state.files.find((candidate) => candidate.id === button.dataset.fileId);
+          if (file) {
+            openFile(file);
+          }
+        });
+      });
+    }
+
+    function renderMarkdown(markdownText) {
+      const html = marked.parse(markdownText);
+      const safeHtml = DOMPurify.sanitize(html, {
+        USE_PROFILES: { html: true }
+      });
+
+      elements.placeholder.classList.add("hidden");
+      elements.markdownContent.classList.remove("hidden");
+      elements.markdownContent.innerHTML = safeHtml;
+
+      if (window.renderMathInElement) {
+        window.renderMathInElement(elements.markdownContent, {
+          delimiters: [
+            { left: "$$", right: "$$", display: true },
+            { left: "$", right: "$", display: false },
+            { left: "\\(", right: "\\)", display: false },
+            { left: "\\[", right: "\\]", display: true }
+          ],
+          throwOnError: false
+        });
+      }
+    }
+
+    async function openFile(file) {
+      try {
+        state.currentFile = file;
+        renderTree();
+        setStatus(`Đang tải ${file.path}...`);
+
+        const markdown = await fetchMarkdownFile(file);
+        renderMarkdown(markdown);
+
+        elements.viewerTitle.textContent = file.name;
+        elements.viewerSubtitle.textContent = file.path;
+        elements.sourceChip.textContent = file.sourceType === "github" ? "Nguồn: GitHub" : "Nguồn: Thư mục local";
+        elements.openRawButton.classList.toggle("hidden", file.sourceType !== "github");
+        elements.openRawButton.onclick = file.sourceType === "github"
+          ? () => window.open(file.rawUrl, "_blank", "noopener,noreferrer")
+          : null;
+        setHashPath(file.path);
+        setStatus(`Đang hiển thị ${file.path}.`);
+      } catch (error) {
+        console.error(error);
+        setStatus(error.message || "Có lỗi khi mở file Markdown.", true);
+      }
+    }
+
+    async function restoreHashSelection() {
+      const targetPath = getHashPath();
+      if (!targetPath) {
+        return false;
+      }
+
+      const match = state.files.find((file) => file.path === targetPath || file.fullPath === targetPath);
+      if (match) {
+        await openFile(match);
+        return true;
+      }
+
+      return false;
+    }
+
+    async function initializeRepoListing() {
+      const repoConfig = inferRepoConfig();
+      state.repoConfig = repoConfig;
+
+      if (!repoConfig) {
+        setStatus("Không suy ra được repo GitHub. Có thể dùng nút Chọn thư mục để đọc local.");
+        elements.sourceNote.textContent = "Muốn quét GitHub chuẩn xác hơn, thêm query `?owner=...&repo=...&branch=main&base=ToanRoiRac`.";
+        return;
+      }
+
+      try {
+        setStatus(`Đang quét repo ${repoConfig.owner}/${repoConfig.repo}...`);
+        state.files = await fetchRepoTree(repoConfig);
+        state.sourceType = "github";
+        elements.sourceNote.textContent = `Đang đọc từ ${repoConfig.owner}/${repoConfig.repo} trên nhánh ${repoConfig.branch}${repoConfig.basePath ? `, thư mục ${repoConfig.basePath}` : ""}.`;
+
+        renderTree();
+
+        if (state.files.length === 0) {
+          setStatus("Không tìm thấy file Markdown trong repo hiện tại.", true);
+          return;
+        }
+
+        const restored = await restoreHashSelection();
+        if (!restored) {
+          await openFile(state.files[0]);
+        }
+      } catch (error) {
+        console.error(error);
+        setStatus(error.message || "Quét repo GitHub thất bại.", true);
+      }
+    }
+
+    async function initializeLocalListing() {
+      if (!window.showDirectoryPicker) {
+        setStatus("Trình duyệt hiện tại không hỗ trợ chọn thư mục local.", true);
+        return;
+      }
+
+      try {
+        const directoryHandle = await window.showDirectoryPicker();
+        state.localDirectoryHandle = directoryHandle;
+        setStatus("Đang quét thư mục local...");
+        state.files = await collectLocalMarkdownFiles(directoryHandle);
+        state.sourceType = "local";
+        elements.sourceNote.textContent = `Đang đọc từ thư mục local: ${directoryHandle.name}.`;
+        elements.sourceChip.textContent = "Nguồn: Thư mục local";
+        renderTree();
+
+        if (state.files.length === 0) {
+          setStatus("Không tìm thấy file Markdown trong thư mục đã chọn.", true);
+          return;
+        }
+
+        const restored = await restoreHashSelection();
+        if (!restored) {
+          await openFile(state.files[0]);
+        }
+      } catch (error) {
+        if (error && error.name === "AbortError") {
+          setStatus("Đã hủy chọn thư mục.");
+          return;
+        }
+
+        console.error(error);
+        setStatus(error.message || "Không thể quét thư mục local.", true);
+      }
+    }
+
+    function bindEvents() {
+      elements.themeToggle.addEventListener("click", () => {
+        const nextTheme = document.body.dataset.theme === "dark" ? "light" : "dark";
+        applyTheme(nextTheme);
+      });
+
+      elements.reloadRepoButton.addEventListener("click", () => {
+        initializeRepoListing();
+      });
+
+      elements.pickFolderButton.addEventListener("click", () => {
+        initializeLocalListing();
+      });
+
+      elements.searchInput.addEventListener("input", (event) => {
+        state.filter = event.target.value;
+        renderTree();
+      });
+
+      window.addEventListener("hashchange", async () => {
+        const targetPath = getHashPath();
+        if (!targetPath) {
+          return;
+        }
+
+        const match = state.files.find((file) => file.path === targetPath || file.fullPath === targetPath);
+        if (match && (!state.currentFile || state.currentFile.id !== match.id)) {
+          await openFile(match);
+        }
+      });
+    }
+
+    async function initializeApp() {
+      initTheme();
+      bindEvents();
+      await initializeRepoListing();
+    }
+
+    initializeApp();
+  </script>
+</body>
+</html>
