@@ -92,12 +92,8 @@ body[data-theme="dark"]::after {
 .page {
   position: relative;
   z-index: 1;
-  display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
-  gap: 24px;
   width: min(1400px, calc(100% - 32px));
   margin: 24px auto;
-  align-items: start;
 }
 
 .panel {
@@ -108,15 +104,26 @@ body[data-theme="dark"]::after {
   backdrop-filter: blur(16px);
 }
 
-.sidebar {
-  position: sticky;
-  top: 24px;
+.screen {
+  min-height: calc(100vh - 48px);
+}
+
+.explorer-screen {
   padding: 20px;
-  max-height: calc(100vh - 48px);
-  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+.explorer-controls {
+  align-items: start;
+}
+
+.screen-note {
+  margin: 8px 0 0;
+  color: var(--text-soft);
+  font-size: 0.94rem;
+  line-height: 1.5;
 }
 
 .brand {
@@ -247,6 +254,12 @@ input {
   padding-right: 6px;
 }
 
+.explorer-tree {
+  flex: 1;
+  min-height: 0;
+  padding: 4px 6px 4px 0;
+}
+
 .tree-group {
   display: grid;
   gap: 10px;
@@ -323,6 +336,24 @@ input {
   color: var(--text-soft);
   line-height: 1.5;
   word-break: break-word;
+}
+
+.reader-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.back-button {
+  width: auto;
+  min-width: 120px;
+}
+
+.compact-theme-toggle {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
 }
 
 .viewer-actions {
@@ -471,14 +502,7 @@ input {
 }
 
 @media (max-width: 980px) {
-  .page {
-    grid-template-columns: 1fr;
-  }
-
-  .sidebar,
-  .viewer {
-    position: static;
-    max-height: none;
+  .screen {
     min-height: 0;
   }
 
@@ -499,10 +523,9 @@ input {
   .page {
     width: min(100% - 16px, 1400px);
     margin: 12px auto;
-    gap: 16px;
   }
 
-  .sidebar,
+  .explorer-screen,
   .viewer {
     padding: 18px;
     border-radius: 20px;
@@ -513,6 +536,14 @@ input {
   }
 
   .theme-toggle {
+    width: 100%;
+  }
+
+  .reader-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .compact-theme-toggle {
     width: 100%;
   }
 }

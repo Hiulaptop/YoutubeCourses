@@ -12,17 +12,20 @@
 </head>
 <body>
   <div class="page">
-    <aside class="sidebar panel">
+    <section class="screen explorer-screen panel" id="explorerScreen">
       <div class="brand">
         <div>
           <h1>Markdown Reader</h1>
-          <p>Đọc toàn bộ file `.md` trong thư mục con với giao diện sáng dịu, tối trầm và dễ tra cứu.</p>
+          <p>Màn hình đầu tiên dùng để duyệt cây thư mục và chọn file Markdown trước khi chuyển sang trang đọc.</p>
         </div>
-        <button class="theme-toggle" id="themeToggle" type="button" aria-label="Đổi giao diện">☀</button>
+        <button class="theme-toggle" data-theme-toggle type="button" aria-label="Đổi giao diện">☀</button>
       </div>
 
-      <section class="controls">
-        <p class="control-title">Repo hiện tại</p>
+      <section class="controls explorer-controls">
+        <div>
+          <p class="control-title">Repo hiện tại</p>
+          <p class="screen-note">Duyệt cây thư mục rồi bấm vào file `.md` để mở màn hình đọc.</p>
+        </div>
         <div class="button-row">
           <button class="button" id="reloadRepoButton" type="button">Quét lại repo</button>
         </div>
@@ -31,16 +34,20 @@
         <p class="status" id="statusText">Đang chuẩn bị danh sách tài liệu...</p>
       </section>
 
-      <div class="tree" id="treeContainer" aria-live="polite"></div>
+      <div class="tree explorer-tree" id="treeContainer" aria-live="polite"></div>
 
-      <p class="hint">Tự động nhận theme đã lưu. Đường dẫn file đang mở sẽ được lưu vào URL để chia sẻ trực tiếp.</p>
-    </aside>
+      <p class="hint">Tự động nhận theme đã lưu. Đường dẫn file đang mở vẫn được lưu vào URL để có thể chia sẻ trực tiếp.</p>
+    </section>
 
-    <main class="viewer panel">
+    <main class="screen viewer panel hidden" id="readerScreen">
       <header class="viewer-header">
         <div>
+          <div class="reader-toolbar">
+            <button class="ghost-button back-button" id="backButton" type="button">Quay lại</button>
+            <button class="theme-toggle compact-theme-toggle" data-theme-toggle type="button" aria-label="Đổi giao diện">☀</button>
+          </div>
           <h2 class="viewer-title" id="viewerTitle">Chọn một file Markdown</h2>
-          <p class="viewer-subtitle" id="viewerSubtitle">Trang sẽ tự quét toàn bộ thư mục của repo này để hiện danh sách file `.md`.</p>
+          <p class="viewer-subtitle" id="viewerSubtitle">Sau khi chọn file ở màn hình duyệt, nội dung sẽ hiển thị ở đây.</p>
         </div>
         <div class="viewer-actions">
           <span class="meta-chip" id="sourceChip">Chưa có nguồn</span>
@@ -51,7 +58,7 @@
       <section id="viewerBody">
         <div class="placeholder" id="placeholder">
           <strong>Chưa có nội dung để hiển thị</strong>
-          <span>Chọn file ở khung bên trái hoặc quét lại repo nếu danh sách chưa xuất hiện.</span>
+          <span>Quay lại màn hình duyệt để chọn file Markdown cần đọc.</span>
         </div>
         <article class="markdown hidden" id="markdownContent"></article>
       </section>
@@ -60,8 +67,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked-katex-extension@5.1.8/lib/index.umd.js"></script>
   <script>
     const REPO_SCOPE = Object.freeze({
       owner: "Hiulaptop",
@@ -73,16 +80,20 @@
       files: [],
       currentFile: null,
       repoConfig: null,
-      filter: ""
+      filter: "",
+      currentScreen: "explorer"
     };
 
     const elements = {
-      themeToggle: document.getElementById("themeToggle"),
+      themeToggles: Array.from(document.querySelectorAll("[data-theme-toggle]")),
       reloadRepoButton: document.getElementById("reloadRepoButton"),
       searchInput: document.getElementById("searchInput"),
       sourceNote: document.getElementById("sourceNote"),
       statusText: document.getElementById("statusText"),
       treeContainer: document.getElementById("treeContainer"),
+      explorerScreen: document.getElementById("explorerScreen"),
+      readerScreen: document.getElementById("readerScreen"),
+      backButton: document.getElementById("backButton"),
       viewerTitle: document.getElementById("viewerTitle"),
       viewerSubtitle: document.getElementById("viewerSubtitle"),
       sourceChip: document.getElementById("sourceChip"),
@@ -98,10 +109,16 @@
       mangle: false
     });
 
+    marked.use(markedKatex({
+      throwOnError: false
+    }));
+
     function applyTheme(theme) {
       document.body.dataset.theme = theme;
       localStorage.setItem("markdown-reader-theme", theme);
-      elements.themeToggle.textContent = theme === "dark" ? "☾" : "☀";
+      elements.themeToggles.forEach((toggle) => {
+        toggle.textContent = theme === "dark" ? "☾" : "☀";
+      });
     }
 
     function initTheme() {
@@ -137,6 +154,19 @@
       if (window.location.hash.replace(/^#/, "") !== nextHash) {
         history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${nextHash}`);
       }
+    }
+
+    function clearHashPath() {
+      if (!window.location.hash) {
+        return;
+      }
+      history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+    }
+
+    function setScreen(screenName) {
+      state.currentScreen = screenName;
+      elements.explorerScreen.classList.toggle("hidden", screenName !== "explorer");
+      elements.readerScreen.classList.toggle("hidden", screenName !== "reader");
     }
 
     async function resolveRepoConfig() {
@@ -266,26 +296,15 @@
     }
 
     function renderMarkdown(markdownText) {
-      const html = marked.parse(markdownText);
+      const normalizedMarkdown = markdownText.replace(/^[\u200B\u200C\u200D\u200E\u200F\uFEFF]/, "");
+      const html = marked.parse(normalizedMarkdown);
       const safeHtml = DOMPurify.sanitize(html, {
-        USE_PROFILES: { html: true }
+        USE_PROFILES: { html: true, svg: true, mathMl: true }
       });
 
       elements.placeholder.classList.add("hidden");
       elements.markdownContent.classList.remove("hidden");
       elements.markdownContent.innerHTML = safeHtml;
-
-      if (window.renderMathInElement) {
-        window.renderMathInElement(elements.markdownContent, {
-          delimiters: [
-            { left: "$$", right: "$$", display: true },
-            { left: "$", right: "$", display: false },
-            { left: "\\(", right: "\\)", display: false },
-            { left: "\\[", right: "\\]", display: true }
-          ],
-          throwOnError: false
-        });
-      }
     }
 
     async function openFile(file) {
@@ -303,11 +322,19 @@
         elements.openRawButton.classList.remove("hidden");
         elements.openRawButton.onclick = () => window.open(file.rawUrl, "_blank", "noopener,noreferrer");
         setHashPath(file.path);
+        setScreen("reader");
         setStatus(`Đang hiển thị ${file.path}.`);
       } catch (error) {
         console.error(error);
         setStatus(error.message || "Có lỗi khi mở file Markdown.", true);
       }
+    }
+
+    function returnToExplorer() {
+      clearHashPath();
+      setScreen("explorer");
+      renderTree();
+      setStatus("Đang ở màn hình duyệt tài liệu.");
     }
 
     async function restoreHashSelection() {
@@ -338,28 +365,37 @@
         renderTree();
 
         if (state.files.length === 0) {
+          setScreen("explorer");
           setStatus("Không tìm thấy file Markdown trong repo hiện tại.", true);
           return;
         }
 
         const restored = await restoreHashSelection();
         if (!restored) {
-          await openFile(state.files[0]);
+          setScreen("explorer");
+          setStatus(`Đã tải ${state.files.length} file Markdown. Hãy chọn một file để đọc.`);
         }
       } catch (error) {
         console.error(error);
+        setScreen("explorer");
         setStatus(error.message || "Quét repo GitHub thất bại.", true);
       }
     }
 
     function bindEvents() {
-      elements.themeToggle.addEventListener("click", () => {
-        const nextTheme = document.body.dataset.theme === "dark" ? "light" : "dark";
-        applyTheme(nextTheme);
+      elements.themeToggles.forEach((toggle) => {
+        toggle.addEventListener("click", () => {
+          const nextTheme = document.body.dataset.theme === "dark" ? "light" : "dark";
+          applyTheme(nextTheme);
+        });
       });
 
       elements.reloadRepoButton.addEventListener("click", () => {
         initializeRepoListing();
+      });
+
+      elements.backButton.addEventListener("click", () => {
+        returnToExplorer();
       });
 
       elements.searchInput.addEventListener("input", (event) => {
@@ -370,6 +406,7 @@
       window.addEventListener("hashchange", async () => {
         const targetPath = getHashPath();
         if (!targetPath) {
+          setScreen("explorer");
           return;
         }
 
