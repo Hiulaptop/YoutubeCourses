@@ -68,10 +68,19 @@
   <script>
 
     const INLINE_KATEX_RULE = /^(\${1,2})(?!\$)((?:\\[\s\S]|[^\\])*?(?:\\[\s\S]|[^\\$]))\1(?=[\s?!\.,:;\)\]\}"'’“”！？。，：；]|$)/;
-    const BLOCK_KATEX_RULE = /^(\${1,2})\n((?:\\[^]|[^\\])+?)\n\1(?:\n|$)/;
+    const BLOCK_KATEX_RULE = /^(\$\$)\n([\s\S]+?)\n\1(?:\n|$)/;
+    const KATEX_MACROS = {
+      "\\R": "\\mathbb{R}",
+      "\\Z": "\\mathbb{Z}",
+      "\\Q": "\\mathbb{Q}",
+      "\\N": "\\mathbb{N}",
+      "\\C": "\\mathbb{C}",
+      "\\exist": "\\exists"
+    };
     const KATEX_RENDER_OPTIONS = Object.freeze({
       throwOnError: false,
-      strict: "ignore"
+      strict: "ignore",
+      macros: KATEX_MACROS
     });
 
     const DATA_ROOT = "data";
@@ -147,16 +156,80 @@
         .join("/");
     }
 
-    function preprocessMath(text) {
-      // Normalize line endings
-      text = text.replace(/\r\n/g, "\n");
-      // Convert single-$ multi-line blocks to $$ display blocks.
-      // Matches $ at end of line, content lines, then $ on its own line (optional surrounding whitespace).
-      // This handles patterns like: list items containing $\n...\n$ that span multiple lines.
+    function collapseMathContent(content) {
+      return content
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .join(" ");
+    }
+
+    function splitMarkdownSegments(text) {
+      const segments = [];
+      const fencePattern = /(^|\n)(`{3,}|~{3,})[^\n]*\n[\s\S]*?\n\2[ \t]*(?=\n|$)/g;
+      let lastIndex = 0;
+      let match;
+
+      while ((match = fencePattern.exec(text)) !== null) {
+        const fenceStart = match.index + match[1].length;
+        if (lastIndex < fenceStart) {
+          segments.push({ type: "markdown", content: text.slice(lastIndex, fenceStart) });
+        }
+
+        segments.push({ type: "code", content: text.slice(fenceStart, fencePattern.lastIndex) });
+        lastIndex = fencePattern.lastIndex;
+      }
+
+      if (lastIndex < text.length) {
+        segments.push({ type: "markdown", content: text.slice(lastIndex) });
+      }
+
+      return segments;
+    }
+
+    function normalizeListItemMathBlocks(text) {
       return text.replace(
-        /(?<!\$)\$[ \t]*\n([\s\S]+?)\n[ \t]*\$[ \t]*(?=\n|$)/g,
-        (_, content) => `$$\n${content}\n$$`
+        /(^|\n)([ \t]*(?:[*+-]|\d+\.)[ \t]+)\$[ \t]*\n([\s\S]+?)\n[ \t]*\$[ \t]*(?=\n|$)/g,
+        (_, lineStart, prefix, content) => `${lineStart}${prefix}$$${collapseMathContent(content)}$$`
       );
+    }
+
+    function normalizeIndentedMathBlocks(text) {
+      return text.replace(
+        /(^|\n)([ \t]{4,})\$[ \t]*\n([\s\S]+?)\n\2\$[ \t]*(?=\n|$)/g,
+        (_, lineStart, indent, content) => `${lineStart}${indent}$$${collapseMathContent(content)}$$`
+      );
+    }
+
+    function normalizeStandaloneMathBlocks(text) {
+      return text.replace(
+        /(^|\n)([ \t]{0,3}(?:>[ \t]*)*)\$[ \t]*\n([\s\S]+?)\n\2\$[ \t]*(?=\n|$)/g,
+        (_, lineStart, prefix, content) => {
+          const body = content.trimEnd();
+          return `${lineStart}${prefix}$$\n${body}\n${prefix}$$`;
+        }
+      );
+    }
+
+    function ensureTopLevelDisplayMathSpacing(text) {
+      return text.replace(/([^\n])\n(?=\$\$\n)/g, "$1\n\n");
+    }
+
+    function preprocessMath(text) {
+      const normalizedText = text.replace(/\r\n/g, "\n");
+
+      return splitMarkdownSegments(normalizedText)
+        .map((segment) => {
+          if (segment.type === "code") {
+            return segment.content;
+          }
+
+          let next = normalizeListItemMathBlocks(segment.content);
+          next = normalizeIndentedMathBlocks(next);
+          next = normalizeStandaloneMathBlocks(next);
+          return ensureTopLevelDisplayMathSpacing(next);
+        })
+        .join("");
     }
 
     async function fetchFileIndex() {
@@ -218,6 +291,11 @@
     function formatMathFallback(text, displayMode) {
       const normalized = text
         .replaceAll("\\space", " ")
+        .replaceAll("\\mathbb{R}", "ℝ")
+        .replaceAll("\\mathbb{Z}", "ℤ")
+        .replaceAll("\\mathbb{Q}", "ℚ")
+        .replaceAll("\\mathbb{N}", "ℕ")
+        .replaceAll("\\mathbb{C}", "ℂ")
         .replace(/\\sqrt\{([^}]+)\}/g, "√($1)")
         .replace(/\^\\circ/g, "°")
         .replaceAll("\\Rightarrow", "⇒")
@@ -237,7 +315,12 @@
         .replaceAll("\\vdots", "⋮")
         .replaceAll("\\forall", "∀")
         .replaceAll("\\exists", "∃")
-        .replaceAll("\\exist", "∃");
+        .replaceAll("\\exist", "∃")
+        .replaceAll("\\R", "ℝ")
+        .replaceAll("\\Z", "ℤ")
+        .replaceAll("\\Q", "ℚ")
+        .replaceAll("\\N", "ℕ")
+        .replaceAll("\\C", "ℂ");
       const formatted = escapeHtml(normalized);
 
       if (displayMode) {

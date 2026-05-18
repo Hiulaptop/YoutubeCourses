@@ -264,7 +264,8 @@ $$
 $$
 
 - Qui tắc chứng minh theo các trường hợp:
-$
+
+$$
 [ (P_1 \lor P_2 \lor \dots \lor P_n) \Rightarrow Q ]
 \equiv
 \left\{
@@ -275,7 +276,7 @@ $
     P_n \Rightarrow Q
     \end{matrix}
 \right\}.
-$
+$$
   - Ta có thể chứng minh các trường hợp riêng lẻ ở vế phải thay cho chứng minh vế trái vì việc chứng minh vế phải đơn giản hơn chứng minh một trường hợp tổng quát ở vế trái.
     - Ví dụ: Chứng minh $k^2$ chia 4 dư 1 hoặc 0
       - Ta chứng minh theo 2 trường hợp $k$ chẵn và lẻ.
@@ -283,23 +284,9 @@ $
       - Nếu $k = 2n + 1 (n \in \R)$ thì $k^2 = [4(r^2 + r) + 1]$ chia 4 dư 1
 - Hệ quả:
 
-    1. $
-        \left\{
-            \begin{matrix}
-            P \Rightarrow Q \\
-            R \Rightarrow S \\
-            \end{matrix}
-        \right\} \Rightarrow [(P \wedge R) \Rightarrow (Q \wedge S)]
-    $
+    1. $$\left\{ \begin{matrix} P \Rightarrow Q \\ R \Rightarrow S \\ \end{matrix} \right\} \Rightarrow [(P \wedge R) \Rightarrow (Q \wedge S)]$$
 
-    2. $
-        \left\{
-            \begin{matrix}
-            P \Rightarrow Q \\
-            R \Rightarrow S \\
-            \end{matrix}
-        \right\} \Rightarrow [(P \vee R) \Rightarrow (Q \vee S)]
-    $
+    2. $$\left\{ \begin{matrix} P \Rightarrow Q \\ R \Rightarrow S \\ \end{matrix} \right\} \Rightarrow [(P \vee R) \Rightarrow (Q \vee S)]$$
 
 ### Áp dụng
 
