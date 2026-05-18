@@ -258,55 +258,125 @@ input {
   flex: 1;
   min-height: 0;
   padding: 4px 6px 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.tree-group {
-  display: grid;
-  gap: 10px;
+.explorer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-.tree-folder {
-  display: grid;
-  gap: 6px;
+.reload-button {
+  width: auto;
+  padding: 6px 12px;
+  flex-shrink: 0;
+  font-size: 1rem;
+  border-radius: 10px;
 }
 
-.tree-folder-title {
-  font-size: 0.8rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  min-height: 32px;
+  flex: 1;
+  min-width: 0;
+}
+
+.breadcrumb-link {
+  border: none;
+  background: none;
+  padding: 4px 6px;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 500;
+  border-radius: 8px;
+  transition: background 0.15s ease, color 0.15s ease;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.breadcrumb-link:hover {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.breadcrumb-sep {
   color: var(--text-soft);
-  padding: 0 4px;
+  font-size: 0.88rem;
+  padding: 0 2px;
+  user-select: none;
+  flex-shrink: 0;
 }
 
-.file-button {
+.breadcrumb-current {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  padding: 4px 6px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-item {
+  display: flex;
+  align-items: center;
   width: 100%;
-  padding: 12px 14px;
+  padding: 10px 14px;
   text-align: left;
-  border-radius: 16px;
+  border-radius: 14px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text);
   cursor: pointer;
-  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+  gap: 10px;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
-.file-button:hover {
+.explorer-item:hover {
   background: var(--accent-soft);
   border-color: var(--selected-border);
   transform: translateX(2px);
 }
 
-.file-button.active {
+.explorer-item.active {
   background: var(--selected);
   border-color: var(--selected-border);
 }
 
-.file-path {
-  display: block;
+.explorer-folder-item {
+  font-weight: 600;
+}
+
+.item-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.95rem;
+}
+
+.item-arrow {
   color: var(--text-soft);
-  font-size: 0.8rem;
-  margin-top: 4px;
-  word-break: break-word;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .viewer {
@@ -466,6 +536,7 @@ input {
 
 .markdown table {
   width: 100%;
+  margin-inline: auto;
   border-collapse: collapse;
   overflow: hidden;
   border-radius: 18px;
@@ -477,7 +548,8 @@ input {
 .markdown td {
   padding: 12px 14px;
   border-bottom: 1px solid var(--border);
-  vertical-align: top;
+  vertical-align: middle;
+  text-align: center;
 }
 
 .markdown thead {
