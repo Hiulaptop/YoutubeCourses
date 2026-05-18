@@ -67,7 +67,7 @@
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script>
 
-    const INLINE_KATEX_RULE = /^(\${1,2})(?!\$)((?:\\.|[^\\\n])*?(?:\\.|[^\\\n\$]))\1(?=[\s?!\.,:;\)\]\}"'”’！？。，：；]|$)/;
+    const INLINE_KATEX_RULE = /^(\${1,2})(?!\$)((?:\\[\s\S]|[^\\])*?(?:\\[\s\S]|[^\\$]))\1(?=[\s?!\.,:;\)\]\}"'’“”！？。，：；]|$)/;
     const BLOCK_KATEX_RULE = /^(\${1,2})\n((?:\\[^]|[^\\])+?)\n\1(?:\n|$)/;
     const KATEX_RENDER_OPTIONS = Object.freeze({
       throwOnError: false,
@@ -145,6 +145,18 @@
         .split("/")
         .map((segment) => encodeURIComponent(segment))
         .join("/");
+    }
+
+    function preprocessMath(text) {
+      // Normalize line endings
+      text = text.replace(/\r\n/g, "\n");
+      // Convert single-$ multi-line blocks to $$ display blocks.
+      // Matches $ at end of line, content lines, then $ on its own line (optional surrounding whitespace).
+      // This handles patterns like: list items containing $\n...\n$ that span multiple lines.
+      return text.replace(
+        /(?<!\$)\$[ \t]*\n([\s\S]+?)\n[ \t]*\$[ \t]*(?=\n|$)/g,
+        (_, content) => `$$\n${content}\n$$`
+      );
     }
 
     async function fetchFileIndex() {
@@ -519,7 +531,8 @@
 
     function renderMarkdown(markdownText) {
       const normalizedMarkdown = markdownText.replace(/^[\u200B\u200C\u200D\u200E\u200F\uFEFF]/, "");
-      const html = marked.parse(normalizedMarkdown);
+      const preprocessedMarkdown = preprocessMath(normalizedMarkdown);
+      const html = marked.parse(preprocessedMarkdown);
       const safeHtml = DOMPurify.sanitize(html, {
         USE_PROFILES: { html: true, svg: true, mathMl: true }
       });
